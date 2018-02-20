@@ -79,7 +79,7 @@ impl<'a> Get<'a> {
                 args.value_of("url").unwrap(),
                 scaii_dir,
             ),
-            _ => unreachable!(),
+            _ => usage_and_exit!(subcommand),
         }
     }
 
