@@ -1,0 +1,140 @@
+name: Sky-Install (SCAII Environment Installer)
+about: "Manages resources related to the SCAII learning environment \
+including backends and the core suite"
+subcommands:
+    - get:
+        about: Fetches SCAII-related components from github
+        subcommands:
+            - backend:
+                about: Fetches an unknown backend
+                args:
+                    - url:
+                        takes_value: true
+                        required: true
+                        value_name: URL
+                        help: The URL to fetch from
+                    - name:
+                        long: name
+                        short: n
+                        takes_value: true
+                        value_name: NAME
+                        help: "The name to save this as under `~/.scaii/git/<NAME>`. \ 
+                        Nonsensical if specified with `save-path`."
+                        conflicts_with: save-path
+                
+            - core:
+                about: Gets the core suite
+            - rts:
+                about: "Gets the Sky-RTS from github, this is a special case of \
+                `get backend` pointing to the RTS"
+        args:
+            - branch:
+                global: true
+                takes_value: true
+                long: branch
+                value_name: BRANCH_NAME
+                help: sets the branch to be used after fetching
+            - save-path:
+                long: save-path
+                short: sp
+                takes_value: true
+                value_name: PATH
+                global: true
+                help: "the absolute path directory to store the repository under. Defaults to \
+                `~/.scaii/git/<REPO-NAME>`"
+
+    - install:
+        about: Installs a SCAII-related component to the proper place
+        subcommands:
+            - core:
+                about: "Installs the core and associated glue and dependencies"
+            - rts:
+                about: "Installs the rts and associated glue and dependencies"
+            - backend:
+                about: Installs an unknown backend
+                args:
+                    - remote:
+                        takes_value: true
+                        long: remote
+                        value_name: URL
+                        help: "the URL to a remote git repository to fetch. Required unless
+                        a path is specified"
+                        required_unless: path
+                        conflicts_with: path
+                    - name:
+                        takes_value: true
+                        long: name
+                        short: n
+                        value_name: NAME
+                        help: "The name of the backend under `~/.scaii/git`"
+                        conflicts_with: 
+                            - path
+                            - save-path
+        args:
+            - path:
+                global: true
+                takes_value: true
+                long: path
+                short: p
+                value_name: PATH
+                help: "the path to a local version of the resource to install \
+                if not present, first checks `.`, the under `~/scaii/git` if the resource is known \
+                (i.e. is not `backend`)"
+            - branch:
+                global: true
+                takes_value: true
+                long: branch
+                value_name: BRANCH_NAME
+                help: sets the branch of the resource to install
+            - save-path:
+                global: true
+                takes_value: true
+                value_name: PATH
+                long: save-path
+                short: sp
+                help: "the directory to store the fetched repository under if this also does a `get`, defaults to
+                `~/.scaii/<REPO-NAME>`"
+    - clean:
+        about: uninstalls a component
+        subcommands:
+            - all:
+                about: Uninstalls the entire ~/.scaii directory
+            - core:
+                about: "Uninstalls all core resources. NOTE: This uninstalls the `glue` directory as well, \
+                effectively uninstalling backends as well"
+            - rts:
+                about: "Uninstalls the RTS and all associated components"
+            - backend:
+                about: "Uninstalls all resources associated with a given backend"
+                args:
+                    - manifest:
+                        help: "The manifest describing where the resources to be deleted exist. \
+                        Must be specified unless `name` is specified"
+                        takes_value: true
+                        value_name: PATH
+                        long: manifest
+                        short: m
+                        conflicts_with: name
+                        required_unless_all: 
+                            - name
+                            - remove-git
+                    - name:
+                        help: "The name of the git responsitory under `~/.scaii/git` to remove. \
+                        Also may be used to specify where the manifest for this backend lies under \ 
+                        `~/.scaii/git`. If used without the `remove-git` option this folder will NOT be \
+                        deleted."
+                        long: name
+                        short: n
+                        required_if: 
+                            - [remove-git, "true"]
+                        takes_value: true
+                        value_name: NAME
+
+        args:
+            - remove-git:
+                global: true
+                long: remove-git
+                short: a
+                help: also removes resources (if any) under `~/.scaii/git`
+            
+
