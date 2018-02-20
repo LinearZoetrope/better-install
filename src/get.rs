@@ -135,14 +135,12 @@ impl<'a> Get<'a> {
                 install_path
             );
         } else if install_path.exists() && self.force {
-            fs::remove_dir_all(&install_path).chain_err(|| {
-                ErrorKind::CannotCleanError(install_path.to_str().unwrap().to_string())
-            })?;
+            remove_dir_all(&install_path)
+                .chain_err(|| ErrorKind::CannotCleanError(format!("{:?}", install_path)))?;
         }
 
-        fs::create_dir_all(&install_path).chain_err(|| {
-            ErrorKind::CannotCreateError(install_path.to_str().unwrap().to_string())
-        })?;
+        fs::create_dir_all(&install_path)
+            .chain_err(|| ErrorKind::CannotCreateError(format!("{:?}", install_path)))?;
 
         println!(
             "Cloning git repository at '{}' into '{:?}'",
@@ -169,13 +167,37 @@ fn clone_repo<P: AsRef<Path>>(target: P, url: &str, branch: &str) -> error::Resu
     Ok(())
 }
 
-#[cfg(unix)]
+#[cfg(not(windows))]
 fn clone_repo<P: AsRef<Path>>(target: P, url: &str, branch: &str) -> error::Result<()> {
     use git2::build::RepoBuilder;
 
     RepoBuilder::new()
         .branch(branch)
         .clone(url, target.as_ref())?;
+
+    Ok(())
+}
+
+/* Workaround for removing directories with remove_dir_all causing OS Error 5 on windows  */
+#[cfg(windows)]
+fn remove_dir_all<P: AsRef<Path>>(path: P) -> error::Result<()> {
+    use std::process::{Command, Stdio};
+
+    Command::new("rmdir")
+        .arg(path.as_ref().to_str().unwrap())
+        .arg("/s")
+        .arg("/q")
+        .stdout(Stdio::inherit())
+        .output()?;
+
+    Ok(())
+}
+
+#[cfg(not(windows))]
+fn remove_dir_all<P: AsRef<Path>>(path: P) -> error::Result<()> {
+    use std::fs;
+
+    fs::remove_dir_all(path.as_ref())?;
 
     Ok(())
 }
