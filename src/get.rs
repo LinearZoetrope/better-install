@@ -1,5 +1,5 @@
 use clap::ArgMatches;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use error;
 
@@ -32,18 +32,33 @@ impl<'a> NameOrPath<'a> {
             _ => Err(()),
         }
     }
+
+    pub fn to_path_buf(self, scaii_dir: &Path) -> PathBuf {
+        match self {
+            NameOrPath::SavePath(path) => path.to_path_buf(),
+            NameOrPath::Name(name) => {
+                let mut scaii_dir = scaii_dir.to_path_buf();
+                scaii_dir.push(".git");
+                scaii_dir.push(name);
+                scaii_dir
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Get<'a> {
     url: &'a str,
     branch: &'a str,
-    name_path: NameOrPath<'a>,
+    path: PathBuf,
     force: bool,
 }
 
 impl<'a> Get<'a> {
-    pub fn from_subcommand(subcommand: &'a ArgMatches<'a>) -> error::Result<Self> {
+    pub fn from_subcommand(
+        subcommand: &'a ArgMatches<'a>,
+        scaii_dir: &Path,
+    ) -> error::Result<Self> {
         /* The unwrapping is because clap also *validates* arguments; can't
         be due to user error */
         let resource = subcommand.subcommand();
@@ -55,30 +70,41 @@ impl<'a> Get<'a> {
         let force = subcommand.is_present("force");
 
         match resource {
-            "core" => Ok(Get::new_core(save_path, branch, force)),
-            "rts" => Ok(Get::new_rts(save_path, branch, force)),
+            "core" => Ok(Get::new_core(save_path, branch, force, scaii_dir)),
+            "rts" => Ok(Get::new_rts(save_path, branch, force, scaii_dir)),
             "backend" => Get::new_backend(
                 NameOrPath::try_from_path_or_name(save_path, args.value_of("name")).unwrap(),
                 branch,
                 force,
                 args.value_of("url").unwrap(),
+                scaii_dir,
             ),
             _ => unreachable!(),
         }
     }
 
-    pub fn new_core(save_path: Option<&'a str>, branch: &'a str, force: bool) -> Self {
+    pub fn new_core(
+        save_path: Option<&'a str>,
+        branch: &'a str,
+        force: bool,
+        scaii_dir: &Path,
+    ) -> Self {
         Get {
-            name_path: NameOrPath::from_path_or_default(save_path, CORE_NAME),
+            path: NameOrPath::from_path_or_default(save_path, CORE_NAME).to_path_buf(scaii_dir),
             url: CORE_URL,
             branch: branch,
             force,
         }
     }
 
-    pub fn new_rts(save_path: Option<&'a str>, branch: &'a str, force: bool) -> Self {
+    pub fn new_rts(
+        save_path: Option<&'a str>,
+        branch: &'a str,
+        force: bool,
+        scaii_dir: &Path,
+    ) -> Self {
         Get {
-            name_path: NameOrPath::from_path_or_default(save_path, RTS_NAME),
+            path: NameOrPath::from_path_or_default(save_path, RTS_NAME).to_path_buf(scaii_dir),
             url: RTS_URL,
             branch: branch,
             force,
@@ -90,6 +116,7 @@ impl<'a> Get<'a> {
         branch: &'a str,
         force: bool,
         url: &'a str,
+        scaii_dir: &Path,
     ) -> error::Result<Self> {
         if let NameOrPath::Name(ref name) = name_path {
             if *name == CORE_NAME || *name == RTS_NAME {
@@ -101,31 +128,18 @@ impl<'a> Get<'a> {
         }
 
         Ok(Get {
-            name_path: name_path,
+            path: name_path.to_path_buf(scaii_dir),
             url: url,
             branch: branch,
             force,
         })
     }
 
-    pub fn get<P: AsRef<Path>>(&self, scaii_dir: P) -> error::Result<()> {
-        match self.name_path {
-            NameOrPath::Name(ref name) => {
-                let mut install_path = scaii_dir.as_ref().to_path_buf();
-                install_path.push("git");
-                install_path.push(&**name);
-
-                self.get_common(install_path)
-            }
-            NameOrPath::SavePath(ref save_path) => self.get_common(save_path),
-        }
-    }
-
-    fn get_common<P: AsRef<Path>>(&self, install_path: P) -> error::Result<()> {
+    pub fn get(&self) -> error::Result<()> {
         use std::fs;
         use error::{ErrorKind, ResultExt};
 
-        let install_path = install_path.as_ref();
+        let install_path = self.path.as_path();
 
         if install_path.exists() && !self.force {
             bail!(

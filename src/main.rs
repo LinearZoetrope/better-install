@@ -38,8 +38,8 @@ quick_main!{ || -> Result<i32> {
 
     match sub_command {
         ("get", sc) => {
-            let cmd = Get::from_subcommand(&sc).chain_err(|| ErrorKind::GetFailure)?;
-            cmd.get(&scaii_home).chain_err(|| ErrorKind::GetFailure)?;
+            let cmd = Get::from_subcommand(&sc, &scaii_home).chain_err(|| ErrorKind::GetFailure)?;
+            cmd.get().chain_err(|| ErrorKind::GetFailure)?;
         }
         ("install", _sc) => unimplemented!(),
         ("clean", _sc) => unimplemented!(),
