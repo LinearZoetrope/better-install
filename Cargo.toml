@@ -5,3 +5,7 @@ authors = ["Zoe Juozapaitis <jragonmiris@gmail.com>"]
 
 [dependencies]
 clap = { version="~2.30.0", features=["yaml"]}
+error-chain = "0.11"
+
+[target.'cfg(unix)'.dependencies]
+git2 = "0.6"

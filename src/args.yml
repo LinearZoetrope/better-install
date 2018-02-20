@@ -29,7 +29,6 @@ subcommands:
                 `get backend` pointing to the RTS"
         args:
             - branch:
-                global: true
                 takes_value: true
                 long: branch
                 value_name: BRANCH_NAME
@@ -39,9 +38,13 @@ subcommands:
                 short: sp
                 takes_value: true
                 value_name: PATH
-                global: true
                 help: "the absolute path directory to store the repository under. Defaults to \
                 `~/.scaii/git/<REPO-NAME>`"
+            - force:
+                long: force
+                short: f
+                help: "Forces overwriting the target directory, if not set, the tool will error on \
+                an existing directory."
 
     - install:
         about: Installs a SCAII-related component to the proper place
