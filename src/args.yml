@@ -130,14 +130,17 @@ subcommands:
                         short: n
                         required_if: 
                             - [remove-git, "true"]
+                            - [git-only, "true"]
                         takes_value: true
                         value_name: NAME
 
         args:
             - remove-git:
-                global: true
                 long: remove-git
                 short: a
                 help: also removes resources (if any) under `~/.scaii/git`
+            - git-only:
+                short: g
+                help: "only removes the git of the given name"
             
 
