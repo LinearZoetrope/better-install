@@ -1,5 +1,3 @@
-use std::borrow::Cow;
-
 use clap::ArgMatches;
 use std::path::Path;
 
@@ -15,22 +13,22 @@ const DEFAULT_BRANCH: &'static str = "master";
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub enum NameOrPath<'a> {
-    Name(Cow<'a, str>),
-    SavePath(Cow<'a, Path>),
+    Name(&'a str),
+    SavePath(&'a Path),
 }
 
 impl<'a> NameOrPath<'a> {
     pub fn from_path_or_default(path: Option<&'a str>, name: &'a str) -> Self {
         match path {
-            Some(path) => NameOrPath::SavePath(Cow::from(Path::new(path))),
-            None => NameOrPath::Name(Cow::from(name)),
+            Some(path) => NameOrPath::SavePath(Path::new(path)),
+            None => NameOrPath::Name(name),
         }
     }
 
     pub fn try_from_path_or_name(path: Option<&'a str>, name: Option<&'a str>) -> Result<Self, ()> {
         match (path, name) {
-            (Some(path), None) => Ok(NameOrPath::SavePath(Cow::from(Path::new(path)))),
-            (None, Some(name)) => Ok(NameOrPath::Name(Cow::from(name))),
+            (Some(path), None) => Ok(NameOrPath::SavePath(Path::new(path))),
+            (None, Some(name)) => Ok(NameOrPath::Name(name)),
             _ => Err(()),
         }
     }
@@ -38,8 +36,8 @@ impl<'a> NameOrPath<'a> {
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Get<'a> {
-    url: Cow<'a, str>,
-    branch: Cow<'a, str>,
+    url: &'a str,
+    branch: &'a str,
     name_path: NameOrPath<'a>,
     force: bool,
 }
@@ -72,8 +70,8 @@ impl<'a> Get<'a> {
     pub fn new_core(save_path: Option<&'a str>, branch: &'a str, force: bool) -> Self {
         Get {
             name_path: NameOrPath::from_path_or_default(save_path, CORE_NAME),
-            url: Cow::from(CORE_URL),
-            branch: Cow::from(branch),
+            url: CORE_URL,
+            branch: branch,
             force,
         }
     }
@@ -81,8 +79,8 @@ impl<'a> Get<'a> {
     pub fn new_rts(save_path: Option<&'a str>, branch: &'a str, force: bool) -> Self {
         Get {
             name_path: NameOrPath::from_path_or_default(save_path, RTS_NAME),
-            url: Cow::from(RTS_URL),
-            branch: Cow::from(branch),
+            url: RTS_URL,
+            branch: branch,
             force,
         }
     }
@@ -94,7 +92,7 @@ impl<'a> Get<'a> {
         url: &'a str,
     ) -> error::Result<Self> {
         if let NameOrPath::Name(ref name) = name_path {
-            if name == CORE_NAME || name == RTS_NAME {
+            if *name == CORE_NAME || *name == RTS_NAME {
                 bail!(
                 "Use of reserved resource name {} (Note: reserved names are 'SCAII' and 'Sky-RTS')",
                 name
@@ -104,8 +102,8 @@ impl<'a> Get<'a> {
 
         Ok(Get {
             name_path: name_path,
-            url: Cow::from(url),
-            branch: Cow::from(branch),
+            url: url,
+            branch: branch,
             force,
         })
     }
