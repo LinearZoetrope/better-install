@@ -2,6 +2,9 @@ error_chain! {
     foreign_links {
         Fmt(::std::fmt::Error);
         Io(::std::io::Error);
+        Curl(::curl::Error);
+        Zip(::zip::result::ZipError);
+        StripPrefix(::std::path::StripPrefixError);
     Git(::git2::Error) #[cfg(unix)];
     WalkDir(::walkdir::Error) #[cfg(windows)];
     }

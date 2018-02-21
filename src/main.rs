@@ -9,6 +9,9 @@ extern crate git2;
 #[cfg(windows)]
 extern crate walkdir;
 
+extern crate curl;
+extern crate zip;
+
 use clap::App;
 
 // Important! Macros can only be used after they're defined
@@ -19,6 +22,7 @@ pub(crate) mod macros;
 pub(crate) mod get;
 
 pub(crate) mod error;
+pub(crate) mod util;
 
 use error::Result;
 

@@ -1,6 +1,8 @@
 use clap::ArgMatches;
 use std::path::{Path, PathBuf};
 
+use util::CdManager;
+
 use error;
 
 const CORE_URL: &'static str = "https://github.com/SCAII/SCAII";
@@ -10,6 +12,14 @@ const RTS_URL: &'static str = "https://github.com/SCAII/Sky-RTS";
 const RTS_NAME: &'static str = "Sky-RTS";
 
 const DEFAULT_BRANCH: &'static str = "master";
+
+const CLOSURE_LIB_URL: &'static str =
+    "https://github.com/google/closure-library/archive/v20171112.zip";
+const CLOSURE_LIB_BYTES: usize = 7_032_575;
+
+const PROTOBUF_JS_URL: &'static str =
+    "https://github.com/google/protobuf/releases/download/v3.5.1/protobuf-js-3.5.1.zip";
+const PROTOBUF_JS_BYTES: usize = 5_538_299;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub enum NameOrPath<'a> {
@@ -38,7 +48,7 @@ impl<'a> NameOrPath<'a> {
             NameOrPath::SavePath(path) => path.to_path_buf(),
             NameOrPath::Name(name) => {
                 let mut scaii_dir = scaii_dir.to_path_buf();
-                scaii_dir.push(".git");
+                scaii_dir.push("git");
                 scaii_dir.push(name);
                 scaii_dir
             }
@@ -52,6 +62,7 @@ pub struct Get<'a> {
     branch: &'a str,
     path: PathBuf,
     force: bool,
+    is_core: bool,
 }
 
 impl<'a> Get<'a> {
@@ -94,6 +105,7 @@ impl<'a> Get<'a> {
             url: CORE_URL,
             branch: branch,
             force,
+            is_core: true,
         }
     }
 
@@ -108,6 +120,7 @@ impl<'a> Get<'a> {
             url: RTS_URL,
             branch: branch,
             force,
+            is_core: false,
         }
     }
 
@@ -132,42 +145,110 @@ impl<'a> Get<'a> {
             url: url,
             branch: branch,
             force,
+            is_core: false,
         })
     }
 
-    pub fn get(&self) -> error::Result<()> {
+    pub fn get(mut self) -> error::Result<()> {
         use std::fs;
         use error::{ErrorKind, ResultExt};
 
-        let install_path = self.path.as_path();
-
-        if install_path.exists() && !self.force {
+        if self.path.exists() && !self.force {
             bail!(
                 "Directory {:?} exists (Hint: rerun this command with '-f' to force overwrite)",
-                install_path
+                self.path
             );
-        } else if install_path.exists() && self.force {
-            fs::remove_dir_all(&install_path)
-                .chain_err(|| ErrorKind::CannotCleanError(format!("{:?}", install_path)))?;
+        } else if self.path.exists() && self.force {
+            fs::remove_dir_all(&self.path)
+                .chain_err(|| ErrorKind::CannotCleanError(format!("{:?}", self.path)))?;
         }
 
-        fs::create_dir_all(&install_path)
-            .chain_err(|| ErrorKind::CannotCreateError(format!("{:?}", install_path)))?;
+        fs::create_dir_all(&self.path)
+            .chain_err(|| ErrorKind::CannotCreateError(format!("{:?}", self.path)))?;
 
         println!(
             "Cloning git repository at '{}' into '{:?}'",
-            self.url, install_path
+            self.url, self.path
         );
 
-        clone_repo(install_path, &*self.url, &*self.branch)
+        clone_repo(&self.path, &*self.url, &*self.branch)?;
+
+        if self.is_core {
+            self.get_core_resources()
+                .chain_err(|| "Could not fetch core dependencies")
+        } else {
+            Ok(())
+        }
     }
+
+    pub fn get_core_resources(&mut self) -> error::Result<()> {
+        use error::ResultExt;
+
+        // Ensures we can't forget to pop our modifications off the path
+        let mut path = CdManager::new(&mut self.path);
+        path.push("viz/js");
+
+        ensure!(
+            path.as_ref().exists(),
+            "Cannot find visualization in core, should be at {}",
+            path.as_ref().display(),
+        );
+
+        let buf = Vec::with_capacity(CLOSURE_LIB_BYTES.max(PROTOBUF_JS_BYTES));
+        let mut buf = get_closure_lib(path.layer(), buf)
+            .chain_err(|| "Could not fetch Google Closure Library")?;
+        buf.clear();
+        get_protobuf_js(path.layer(), buf).chain_err(|| "Could not fetch protobuf_js")?;
+
+        Ok(())
+    }
+}
+
+fn get_closure_lib(mut path: CdManager, buf: Vec<u8>) -> error::Result<Vec<u8>> {
+    use util;
+    path.push("closure_library");
+
+    let buf = util::curl(CLOSURE_LIB_URL, Some(buf))?;
+    util::unzip(&buf, path.layer(), true)?;
+    #[cfg(windows)]
+    {
+        util::make_deletable(&path)?;
+    }
+
+    Ok(buf)
+}
+
+fn get_protobuf_js(mut path: CdManager, buf: Vec<u8>) -> error::Result<Vec<u8>> {
+    use util;
+    use std::fs;
+
+    let buf = util::curl(PROTOBUF_JS_URL, Some(buf))?;
+    util::unzip(&buf, path.layer(), false)?;
+
+    let mut curr_dir = path.clone_inner();
+    curr_dir.push("protobuf_js");
+
+    path.push("protobuf-3.5.1");
+
+    #[cfg(windows)]
+    {
+        util::make_deletable(&path)?;
+    }
+
+    path.push("js");
+
+    fs::rename(&path, curr_dir)?;
+
+    path.pop()?;
+    fs::remove_dir_all(path)?;
+
+    Ok(buf)
 }
 
 #[cfg(windows)]
 fn clone_repo<P: AsRef<Path>>(target: P, url: &str, branch: &str) -> error::Result<()> {
     use std::process::{Command, Stdio};
-    use std::fs;
-    use walkdir::WalkDir;
+    use util;
 
     Command::new("git")
         .arg("clone")
@@ -182,20 +263,7 @@ fn clone_repo<P: AsRef<Path>>(target: P, url: &str, branch: &str) -> error::Resu
     // manually set all the files to not be read
     // only
 
-    let wd = WalkDir::new(target);
-    for entry in wd {
-        let entry = entry?;
-        let metadata = entry.metadata()?;
-
-        // Folders are always readonly in windows
-        if metadata.is_file() {
-            let mut perm = metadata.permissions();
-            perm.set_readonly(false);
-            fs::set_permissions(entry.path(), perm)?;
-        }
-    }
-
-    Ok(())
+    util::make_deletable(target)
 }
 
 #[cfg(not(windows))]
