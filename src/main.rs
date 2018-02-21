@@ -6,6 +6,9 @@ extern crate error_chain;
 #[cfg(unix)]
 extern crate git2;
 
+#[cfg(windows)]
+extern crate walkdir;
+
 use clap::App;
 
 // Important! Macros can only be used after they're defined

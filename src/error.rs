@@ -2,7 +2,8 @@ error_chain! {
     foreign_links {
         Fmt(::std::fmt::Error);
         Io(::std::io::Error);
-	Git(::git2::Error) #[cfg(unix)];
+    Git(::git2::Error) #[cfg(unix)];
+    WalkDir(::walkdir::Error) #[cfg(windows)];
     }
 
     errors {

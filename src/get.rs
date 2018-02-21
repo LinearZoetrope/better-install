@@ -147,7 +147,7 @@ impl<'a> Get<'a> {
                 install_path
             );
         } else if install_path.exists() && self.force {
-            remove_dir_all(&install_path)
+            fs::remove_dir_all(&install_path)
                 .chain_err(|| ErrorKind::CannotCleanError(format!("{:?}", install_path)))?;
         }
 
@@ -166,6 +166,8 @@ impl<'a> Get<'a> {
 #[cfg(windows)]
 fn clone_repo<P: AsRef<Path>>(target: P, url: &str, branch: &str) -> error::Result<()> {
     use std::process::{Command, Stdio};
+    use std::fs;
+    use walkdir::WalkDir;
 
     Command::new("git")
         .arg("clone")
@@ -175,6 +177,23 @@ fn clone_repo<P: AsRef<Path>>(target: P, url: &str, branch: &str) -> error::Resu
         .arg(target.as_ref().to_str().unwrap())
         .stdout(Stdio::inherit())
         .output()?;
+
+    // This causes permission bugs if we don't
+    // manually set all the files to not be read
+    // only
+
+    let wd = WalkDir::new(target);
+    for entry in wd {
+        let entry = entry?;
+        let metadata = entry.metadata()?;
+
+        // Folders are always readonly in windows
+        if metadata.is_file() {
+            let mut perm = metadata.permissions();
+            perm.set_readonly(false);
+            fs::set_permissions(entry.path(), perm)?;
+        }
+    }
 
     Ok(())
 }
@@ -186,30 +205,6 @@ fn clone_repo<P: AsRef<Path>>(target: P, url: &str, branch: &str) -> error::Resu
     RepoBuilder::new()
         .branch(branch)
         .clone(url, target.as_ref())?;
-
-    Ok(())
-}
-
-/* Workaround for removing directories with remove_dir_all causing OS Error 5 on windows  */
-#[cfg(windows)]
-fn remove_dir_all<P: AsRef<Path>>(path: P) -> error::Result<()> {
-    use std::process::{Command, Stdio};
-
-    Command::new("rmdir")
-        .arg(path.as_ref().to_str().unwrap())
-        .arg("/s")
-        .arg("/q")
-        .stdout(Stdio::inherit())
-        .output()?;
-
-    Ok(())
-}
-
-#[cfg(not(windows))]
-fn remove_dir_all<P: AsRef<Path>>(path: P) -> error::Result<()> {
-    use std::fs;
-
-    fs::remove_dir_all(path.as_ref())?;
 
     Ok(())
 }
