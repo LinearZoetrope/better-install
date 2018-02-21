@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 use error;
+use indicatif::ProgressBar;
 
 /// A "Change Directory" manager or `CdManager` prevents you from forgetting to pop
 /// directories at the end of a block.
@@ -191,7 +192,12 @@ pub fn curl(url: &str, buf: Option<Vec<u8>>) -> error::Result<Vec<u8>> {
 /// "foo/*" directly into ".". You could consider it shorthand for `unzip foo.zip`
 /// followed by `mv foo/* .` and `rm foo`.
 // Modified from the `zip` github Repo, see ATTRIBUTIONS in the crate root for more info
-pub fn unzip(buf: &[u8], mut path_root: CdManager, into: bool) -> error::Result<()> {
+pub fn unzip(
+    buf: &[u8],
+    mut path_root: CdManager,
+    into: bool,
+    bar: &ProgressBar,
+) -> error::Result<()> {
     use std::io::Cursor;
     use std::io;
     use std::fs;
@@ -204,6 +210,8 @@ pub fn unzip(buf: &[u8], mut path_root: CdManager, into: bool) -> error::Result<
     } else {
         Path::new("").to_path_buf()
     };
+
+    bar.set_length(archive.len() as u64);
 
     for i in 0..archive.len() {
         let mut file = archive.by_index(i)?;
@@ -240,6 +248,8 @@ pub fn unzip(buf: &[u8], mut path_root: CdManager, into: bool) -> error::Result<
                 fs::set_permissions(&outpath, fs::Permissions::from_mode(mode)).unwrap();
             }
         }
+
+        bar.inc(1);
     }
 
     Ok(())

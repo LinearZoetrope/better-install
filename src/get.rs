@@ -5,6 +5,8 @@ use util::CdManager;
 
 use error;
 
+use indicatif::ProgressBar;
+
 const CORE_URL: &'static str = "https://github.com/SCAII/SCAII";
 const CORE_NAME: &'static str = "SCAII";
 
@@ -152,6 +154,8 @@ impl<'a> Get<'a> {
     pub fn get(mut self) -> error::Result<()> {
         use std::fs;
         use error::{ErrorKind, ResultExt};
+        use indicatif::{ProgressBar, ProgressStyle};
+        use console::style;
 
         if self.path.exists() && !self.force {
             bail!(
@@ -166,11 +170,6 @@ impl<'a> Get<'a> {
         fs::create_dir_all(&self.path)
             .chain_err(|| ErrorKind::CannotCreateError(format!("{:?}", self.path)))?;
 
-        println!(
-            "Cloning git repository at '{}' into '{:?}'",
-            self.url, self.path
-        );
-
         clone_repo(&self.path, &*self.url, &*self.branch)?;
 
         if self.is_core {
@@ -182,7 +181,10 @@ impl<'a> Get<'a> {
     }
 
     pub fn get_core_resources(&mut self) -> error::Result<()> {
-        use error::ResultExt;
+        use error::{ErrorKind, MultiError, ResultExt};
+        use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+        use crossbeam;
+        use std::sync::mpsc;
 
         // Ensures we can't forget to pop our modifications off the path
         let mut path = CdManager::new(&mut self.path);
@@ -194,36 +196,113 @@ impl<'a> Get<'a> {
             path.as_ref().display(),
         );
 
-        let buf = Vec::with_capacity(CLOSURE_LIB_BYTES.max(PROTOBUF_JS_BYTES));
-        let mut buf = get_closure_lib(path.layer(), buf)
-            .chain_err(|| "Could not fetch Google Closure Library")?;
-        buf.clear();
-        get_protobuf_js(path.layer(), buf).chain_err(|| "Could not fetch protobuf_js")?;
+        let mut errors = MultiError { errors: vec![] };
 
-        Ok(())
+        crossbeam::scope(|scope| {
+            let (err_send, err_recv) = mpsc::channel();
+            let bars = MultiProgress::new();
+            bars.set_move_cursor(true);
+
+            let closure_bar = bars.add(ProgressBar::new_spinner());
+            closure_bar.set_style(
+                ProgressStyle::default_spinner()
+                    .template("[{elapsed_precise}] {spinner} {msg}")
+                    .tick_chars(r"/\"),
+            );
+            let closure_err = err_send.clone();
+            let mut closure_path = path.clone_inner();
+
+            let protobuf_bar = bars.add(ProgressBar::new_spinner());
+            protobuf_bar.set_style(
+                ProgressStyle::default_spinner()
+                    .template("[{elapsed_precise}] {spinner} {msg}")
+                    .tick_chars(r"/\"),
+            );
+            let protobuf_err = err_send;
+            let mut protobuf_path = path.clone_inner();
+
+            let mut joins = Vec::with_capacity(2);
+            joins.push(scope.spawn(move || {
+                let closure_path = CdManager::new(&mut closure_path);
+
+                closure_err
+                    .send(get_closure_lib(closure_path, closure_bar))
+                    .expect("Could not send closure error");
+            }));
+
+            joins.push(scope.spawn(move || {
+                let protobuf_path = CdManager::new(&mut protobuf_path);
+
+                protobuf_err
+                    .send(get_protobuf_js(protobuf_path, protobuf_bar))
+                    .expect("Could not send closure error");
+            }));
+
+            for res in err_recv.into_iter().take(2) {
+                if let Err(err) = res {
+                    errors.errors.push(err);
+                }
+            }
+
+            if let Err(err) = bars.join_and_clear()
+                .chain_err(|| "Error joining progress bars")
+            {
+                errors.errors.push(err);
+            }
+        });
+
+        if errors.errors.len() > 0 {
+            bail!(ErrorKind::MultiError(errors))
+        } else {
+            Ok(())
+        }
     }
 }
 
-fn get_closure_lib(mut path: CdManager, buf: Vec<u8>) -> error::Result<Vec<u8>> {
+fn get_closure_lib(mut path: CdManager, bar: ProgressBar) -> error::Result<()> {
+    use indicatif::ProgressStyle;
     use util;
     path.push("closure_library");
 
+    bar.enable_steady_tick(100);
+    bar.set_message("Downloading Google Closure Library");
+    let buf = Vec::with_capacity(CLOSURE_LIB_BYTES);
     let buf = util::curl(CLOSURE_LIB_URL, Some(buf))?;
-    util::unzip(&buf, path.layer(), true)?;
+
+    bar.disable_steady_tick();
+    bar.set_style(
+        ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} ({percent}) {msg}"),
+    );
+    bar.set_message("Unzipping Google Closure Library");
+    util::unzip(&buf, path.layer(), true, &bar)?;
     #[cfg(windows)]
     {
         util::make_deletable(&path)?;
     }
 
-    Ok(buf)
+    bar.finish_with_message("Done downloading Google Closure Library");
+
+    Ok(())
 }
 
-fn get_protobuf_js(mut path: CdManager, buf: Vec<u8>) -> error::Result<Vec<u8>> {
+fn get_protobuf_js(mut path: CdManager, bar: ProgressBar) -> error::Result<()> {
+    use indicatif::ProgressStyle;
     use util;
     use std::fs;
 
+    bar.enable_steady_tick(100);
+    bar.set_message("Downloading Protobuf Library");
+    let buf = Vec::with_capacity(PROTOBUF_JS_BYTES);
     let buf = util::curl(PROTOBUF_JS_URL, Some(buf))?;
-    util::unzip(&buf, path.layer(), false)?;
+
+    bar.disable_steady_tick();
+    bar.set_message("Unzipping Protobuf Library");
+    bar.set_style(
+        ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} ({percent}) {msg}"),
+    );
+    util::unzip(&buf, path.layer(), false, &bar)?;
 
     let mut curr_dir = path.clone_inner();
     curr_dir.push("protobuf_js");
@@ -237,27 +316,70 @@ fn get_protobuf_js(mut path: CdManager, buf: Vec<u8>) -> error::Result<Vec<u8>> 
 
     path.push("js");
 
+    bar.set_style(ProgressStyle::default_spinner());
+    bar.set_message("Placing Protobuf files in the right place...");
+    bar.enable_steady_tick(10);
+
     fs::rename(&path, curr_dir)?;
 
     path.pop()?;
     fs::remove_dir_all(path)?;
 
-    Ok(buf)
+    bar.finish_with_message("Done downloading Protobuf Library");
+
+    Ok(())
 }
 
 #[cfg(windows)]
 fn clone_repo<P: AsRef<Path>>(target: P, url: &str, branch: &str) -> error::Result<()> {
     use std::process::{Command, Stdio};
     use util;
+    use indicatif::ProgressStyle;
+    use std::thread;
+    use std::time::Duration;
 
-    Command::new("git")
+    let bar = ProgressBar::new(0);
+    bar.set_message(&format!(
+        "Cloning git repository at '{}' into '{}'",
+        url,
+        target.as_ref().display()
+    ));
+    bar.set_prefix("[1/?]:");
+    bar.set_style(
+        ProgressStyle::default_bar()
+            .template("{prefix.cyan} [{elapsed.green}] {spinner:2} {msg}")
+            .tick_chars(r"/\"),
+    );
+
+    let mut child = Command::new("git")
         .arg("clone")
         .arg(url)
         .arg("-b")
         .arg(branch)
         .arg(target.as_ref().to_str().unwrap())
-        .stdout(Stdio::inherit())
-        .output()?;
+        .spawn()?;
+
+    loop {
+        match child.try_wait() {
+            Ok(Some(code)) => {
+                if code.success() {
+                    bar.finish();
+                    break;
+                } else {
+                    bar.finish();
+                    bail!("Could not execute git")
+                }
+            }
+            Ok(None) => {
+                bar.tick();
+                thread::sleep(Duration::from_millis(100))
+            }
+            Err(err) => {
+                bar.finish();
+                bail!(err)
+            }
+        }
+    }
 
     // This causes permission bugs if we don't
     // manually set all the files to not be read

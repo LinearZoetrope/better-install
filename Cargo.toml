@@ -10,6 +10,12 @@ error-chain = "0.11"
 zip = "0.3.0"
 curl = "0.4.8"
 
+indicatif = "0.9"
+dialoguer = "0.1"
+console = "0.6"
+
+crossbeam = "0.3"
+
 [target.'cfg(not(windows))'.dependencies]
 git2 = "0.6"
 

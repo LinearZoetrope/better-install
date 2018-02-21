@@ -1,7 +1,11 @@
 #[macro_use]
 extern crate clap;
+extern crate console;
+extern crate crossbeam;
+extern crate dialoguer;
 #[macro_use]
 extern crate error_chain;
+extern crate indicatif;
 
 #[cfg(unix)]
 extern crate git2;

@@ -24,7 +24,30 @@ error_chain! {
             description("could not execute get subcommand")
             display("could not execute get subcommand")
         }
+
+        MultiError(errors: MultiError) {
+            description("multiple errors ocurred in parallel")
+            display("multiple errors ocurred in parallel: {}", errors)
+        }
     }
 }
 
 pub const CLEAN_EXIT: i32 = 0;
+
+#[derive(Debug)]
+pub struct MultiError {
+    pub errors: Vec<Error>,
+}
+
+impl ::std::fmt::Display for MultiError {
+    fn fmt(
+        &self,
+        formatter: &mut ::std::fmt::Formatter,
+    ) -> ::std::result::Result<(), ::std::fmt::Error> {
+        for (i, error) in self.errors.iter().enumerate() {
+            write!(formatter, "Error {}: {}\n", i, error)?;
+        }
+
+        Ok(())
+    }
+}
