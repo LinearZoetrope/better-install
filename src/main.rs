@@ -23,6 +23,7 @@ pub(crate) mod get;
 
 pub(crate) mod error;
 pub(crate) mod util;
+pub mod constants;
 
 use error::Result;
 

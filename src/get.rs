@@ -1,60 +1,10 @@
 use clap::ArgMatches;
 use std::path::{Path, PathBuf};
 
-use util::CdManager;
-
 use error;
 
-const CORE_URL: &'static str = "https://github.com/SCAII/SCAII";
-const CORE_NAME: &'static str = "SCAII";
-
-const RTS_URL: &'static str = "https://github.com/SCAII/Sky-RTS";
-const RTS_NAME: &'static str = "Sky-RTS";
-
-const DEFAULT_BRANCH: &'static str = "master";
-
-const CLOSURE_LIB_URL: &'static str =
-    "https://github.com/google/closure-library/archive/v20171112.zip";
-const CLOSURE_LIB_BYTES: usize = 7_032_575;
-
-const PROTOBUF_JS_URL: &'static str =
-    "https://github.com/google/protobuf/releases/download/v3.5.1/protobuf-js-3.5.1.zip";
-const PROTOBUF_JS_BYTES: usize = 5_538_299;
-
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
-pub enum NameOrPath<'a> {
-    Name(&'a str),
-    SavePath(&'a Path),
-}
-
-impl<'a> NameOrPath<'a> {
-    pub fn from_path_or_default(path: Option<&'a str>, name: &'a str) -> Self {
-        match path {
-            Some(path) => NameOrPath::SavePath(Path::new(path)),
-            None => NameOrPath::Name(name),
-        }
-    }
-
-    pub fn try_from_path_or_name(path: Option<&'a str>, name: Option<&'a str>) -> Result<Self, ()> {
-        match (path, name) {
-            (Some(path), None) => Ok(NameOrPath::SavePath(Path::new(path))),
-            (None, Some(name)) => Ok(NameOrPath::Name(name)),
-            _ => Err(()),
-        }
-    }
-
-    pub fn to_path_buf(self, scaii_dir: &Path) -> PathBuf {
-        match self {
-            NameOrPath::SavePath(path) => path.to_path_buf(),
-            NameOrPath::Name(name) => {
-                let mut scaii_dir = scaii_dir.to_path_buf();
-                scaii_dir.push("git");
-                scaii_dir.push(name);
-                scaii_dir
-            }
-        }
-    }
-}
+use util::{CdManager, NameOrPath};
+use constants::*;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Get<'a> {
