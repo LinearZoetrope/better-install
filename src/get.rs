@@ -155,20 +155,21 @@ impl<'a> Get<'a> {
 
         if self.path.exists() && !self.force {
             bail!(
-                "Directory {:?} exists (Hint: rerun this command with '-f' to force overwrite)",
-                self.path
+                "Directory {} exists (Hint: rerun this command with '-f' to force overwrite)",
+                self.path.display()
             );
         } else if self.path.exists() && self.force {
             fs::remove_dir_all(&self.path)
-                .chain_err(|| ErrorKind::CannotCleanError(format!("{:?}", self.path)))?;
+                .chain_err(|| ErrorKind::CannotCleanError(format!("{}", self.path.display())))?;
         }
 
         fs::create_dir_all(&self.path)
-            .chain_err(|| ErrorKind::CannotCreateError(format!("{:?}", self.path)))?;
+            .chain_err(|| ErrorKind::CannotCreateError(format!("{}", self.path.display())))?;
 
         println!(
-            "Cloning git repository at '{}' into '{:?}'",
-            self.url, self.path
+            "Cloning git repository at '{}' into '{}'",
+            self.url,
+            self.path.display()
         );
 
         clone_repo(&self.path, &*self.url, &*self.branch)?;
