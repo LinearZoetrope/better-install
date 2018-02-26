@@ -101,6 +101,7 @@ impl<'a> Get<'a> {
 
     pub fn get(mut self) -> error::Result<()> {
         use std::fs;
+        use fs2;
         use error::{ErrorKind, ResultExt};
 
         if self.path.exists() && !self.force {
@@ -109,7 +110,7 @@ impl<'a> Get<'a> {
                 self.path.display()
             );
         } else if self.path.exists() && self.force {
-            fs::remove_dir_all(&self.path)
+            fs2::remove_dir_all(&self.path)
                 .chain_err(|| ErrorKind::CannotCleanError(format!("{}", self.path.display())))?;
         }
 
@@ -161,10 +162,6 @@ fn get_closure_lib(mut path: CdManager, buf: Vec<u8>) -> error::Result<Vec<u8>> 
 
     let buf = util::curl(CLOSURE_LIB_URL, Some(buf))?;
     util::unzip(&buf, path.layer(), true)?;
-    #[cfg(windows)]
-    {
-        util::make_deletable(&path)?;
-    }
 
     Ok(buf)
 }
@@ -172,6 +169,7 @@ fn get_closure_lib(mut path: CdManager, buf: Vec<u8>) -> error::Result<Vec<u8>> 
 fn get_protobuf_js(mut path: CdManager, buf: Vec<u8>) -> error::Result<Vec<u8>> {
     use util;
     use std::fs;
+    use fs2;
 
     let buf = util::curl(PROTOBUF_JS_URL, Some(buf))?;
     util::unzip(&buf, path.layer(), false)?;
@@ -181,17 +179,12 @@ fn get_protobuf_js(mut path: CdManager, buf: Vec<u8>) -> error::Result<Vec<u8>> 
 
     path.push("protobuf-3.5.1");
 
-    #[cfg(windows)]
-    {
-        util::make_deletable(&path)?;
-    }
-
     path.push("js");
 
     fs::rename(&path, curr_dir)?;
 
     path.pop()?;
-    fs::remove_dir_all(path)?;
+    fs2::remove_dir_all(path)?;
 
     Ok(buf)
 }
@@ -199,7 +192,6 @@ fn get_protobuf_js(mut path: CdManager, buf: Vec<u8>) -> error::Result<Vec<u8>> 
 #[cfg(windows)]
 fn clone_repo<P: AsRef<Path>>(target: P, url: &str, branch: &str) -> error::Result<()> {
     use std::process::{Command, Stdio};
-    use util;
 
     Command::new("git")
         .arg("clone")
@@ -210,11 +202,7 @@ fn clone_repo<P: AsRef<Path>>(target: P, url: &str, branch: &str) -> error::Resu
         .stdout(Stdio::inherit())
         .output()?;
 
-    // This causes permission bugs if we don't
-    // manually set all the files to not be read
-    // only
-
-    util::make_deletable(target)
+    Ok(())
 }
 
 #[cfg(not(windows))]

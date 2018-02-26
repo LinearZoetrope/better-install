@@ -10,6 +10,7 @@ extern crate git2;
 extern crate walkdir;
 
 extern crate curl;
+extern crate remove_dir_all as fs2;
 extern crate zip;
 
 use clap::App;
@@ -51,7 +52,7 @@ quick_main!{ || -> Result<i32> {
         }
         ("install", _sc) => unimplemented!(),
         ("clean", _sc) => unimplemented!(),
-        _ => unreachable!(),
+        _ => usage_and_exit!(app),
     };
 
     Ok(CLEAN_EXIT)

@@ -118,24 +118,3 @@ fn sanitize_filename(filename: &str) -> PathBuf {
             path
         })
 }
-
-#[cfg(windows)]
-pub fn make_deletable<P: AsRef<Path>>(target: P) -> error::Result<()> {
-    use walkdir::WalkDir;
-    use std::fs;
-
-    let wd = WalkDir::new(target);
-    for entry in wd {
-        let entry = entry?;
-        let metadata = entry.metadata()?;
-
-        // Folders are always readonly in windows
-        if metadata.is_file() {
-            let mut perm = metadata.permissions();
-            perm.set_readonly(false);
-            fs::set_permissions(entry.path(), perm)?;
-        }
-    }
-
-    Ok(())
-}
