@@ -102,9 +102,6 @@ subcommands:
         subcommands:
             - all:
                 about: Uninstalls the entire ~/.scaii directory
-            - core:
-                about: "Uninstalls all core resources. NOTE: This uninstalls the `glue` directory as well, \
-                effectively uninstalling backends as well"
             - rts:
                 about: "Uninstalls the RTS and all associated components"
             - backend:
